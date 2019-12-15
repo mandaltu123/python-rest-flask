@@ -1,3 +1,10 @@
+"""
+Registration of an user
+Each user gets 10 tokens
+Store a sentence on our database for 1 token
+retrieves his stored sentence out of the database for 1 token
+password
+"""
 from flask import Flask, jsonify, request
 from flask_restful import Api, Resource
 from pymongo import MongoClient
@@ -151,6 +158,7 @@ api.add_resource(Subtract, "/subtract")
 api.add_resource(Multiplpy, "/multiply")
 api.add_resource(Divde, "/division")
 api.add_resource(Visit, "/hello")
+
 
 @app.route('/')
 def hello_world():
