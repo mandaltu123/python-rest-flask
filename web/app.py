@@ -1,169 +1,128 @@
 """
-Registration of an user
-Each user gets 10 tokens
-Store a sentence on our database for 1 token
-retrieves his stored sentence out of the database for 1 token
-password
+This class is going to be little more intense than what we did in math_app.py
 """
 from flask import Flask, jsonify, request
 from flask_restful import Api, Resource
 from pymongo import MongoClient
+import bcrypt
+import logging
 
 app = Flask(__name__)
 api = Api(app)
+logging.basicConfig(level=logging.DEBUG)
 
 # create a mongodb client using pymongo
 client = MongoClient("mongodb://db:27017")
-# create a db
-db = client.aNewDb
-UserNum = db["UserNum"]
-UserNum.insert({
-    'num_of_users': 0
-})
+# create db
+db = client.SentenceDatabase
+# create collection
+Users = db["Users"]
 
 
-class Visit(Resource):
-    def get(self):
-        print("in Visit resource...")
-        prev_num = UserNum.find({})[0]['num_of_users']
-        new_num = prev_num + 1
-        UserNum.update_one({}, {"$set": {"num_of_users": new_num}})
-        return str("Hello user " + str(new_num))
+class Register(Resource):
+    """ Class that registers a new user"""
+
+    def post(self):
+        app.logger.info("I am in post method ...")
+        # 1. get posted data by the user
+        postedData = request.get_json()
+        # Get the data
+        username = postedData['username']
+        password = postedData['password']
+        # hash(password + salt) = ser23423esrwe345
+        hashed = bcrypt.hashpw(password.encode('utf8'), bcrypt.gensalt())
+        app.logger.info(f"the hashed password is = {hashed}")
+        # Store the username and password into mongodb
+        Users.insert_one({
+            "username": username,
+            "password": hashed,
+            "sentence": ""
+        })
+
+        retJson = {
+            "status": 200,
+            "message": "You have successfully signed up for the api"
+        }
+        return jsonify(retJson)
 
 
-def checkPostedData(postedData, functionName):
-    print(f"I am in checkPostedData method and the function we are validating is {functionName}")
-    if "x" not in postedData or "y" not in postedData:
-        return 301
+class Store(Resource):
+    """Class that stores a sentence posted by a user with username and password"""
+
+    def post(self):
+        app.logger.info("In post method of Store api")
+        # first get the posted data
+        postedData = request.get_json()
+        app.logger.info(f"The posted data is {postedData}")
+
+        username = postedData["username"]
+        password = postedData["password"]
+        sentence = postedData["sentence"]
+
+        # verify username and password with database
+        correct_password = _verify_password(username, password)
+        app.logger.debug(f"correct_password ? {correct_password}")
+        if not correct_password:
+            return_json = {
+                "status": 302,
+                "message": "Invalid username / password"
+            }
+            jsonify(return_json)
+
+        Users.update_one({
+            "username": username,
+        }, {
+            "$set": {"sentence": sentence}
+        })
+        return_json = {
+            "status": 200,
+            "message": "sentence saved successfully"
+        }
+        return jsonify(return_json)
+
+
+class ListSentences(Resource):
+    def post(self):
+        # get the posted data
+        postedData = request.get_json()
+        username = postedData["username"]
+        password = postedData["password"]
+        # verify username and password with database
+        correct_password = _verify_password(username, password)
+        app.logger.debug(f"correct_password ? {correct_password}")
+        if not correct_password:
+            return_json = {
+                "status": 302,
+                "message": "Invalid username / password"
+            }
+            jsonify(return_json)
+
+        sentence = Users.find({
+            "username": username
+        })[0]["sentence"]
+        app.logger.debug(f"got the stored sentence for given user  {username} and the sentence is {sentence}")
+        # Finally prepare the response
+        return_json = {
+            "status": 200,
+            "sentence": sentence
+        }
+        return jsonify(return_json)
+
+
+def _verify_password(username, password):
+    """Helper method that verifies whether the given credentials are valid or not """
+    hashed_pw = Users.find({
+        "username": username
+    })[0]["password"]
+    if bcrypt.hashpw(password.encode('utf8'), hashed_pw) == hashed_pw:
+        return True
     else:
-        print("************In that else condition")
-        if functionName == "division":
-            if int(postedData["y"]) == 0:
-                return 301
-        return 200
+        return False
 
 
-class Add(Resource):
-    def post(self):
-        # If I am here, then then the resource Add was requested
-        # get posted data
-        postedData = request.get_json()
-        # validate posted data
-        status_code = checkPostedData(postedData, "add")
-        print("validation stus code = ", status_code)
-        if (status_code != 200):
-            ret_json = {
-                "Mesasge": "An error has occured",
-                "Status Code": status_code
-            }
-            return jsonify(ret_json)
-
-        x = postedData["x"]
-        y = postedData["y"]
-        x = int(x)
-        y = int(y)
-
-        result = x + y
-        re_map = {
-            "Message": result,
-            "Status Code": 200
-        }
-        return jsonify(re_map)
-
-
-class Subtract(Resource):
-    def post(self):
-        # If I am here, then then the resource Add was requested
-        # get posted data
-        postedData = request.get_json()
-        # validate posted data
-        status_code = checkPostedData(postedData, "subtract")
-        print("validation stus code = ", status_code)
-        if (status_code != 200):
-            ret_json = {
-                "Mesasge": "An error has occured",
-                "Status Code": status_code
-            }
-            return jsonify(ret_json)
-
-        x = postedData["x"]
-        y = postedData["y"]
-        x = int(x)
-        y = int(y)
-        result = x - y
-        ret_json = {
-            "Message": result,
-            "Status code": 200
-        }
-        return jsonify(ret_json)
-
-
-class Multiplpy(Resource):
-    def post(self):
-        # If I am here, then then the resource Add was requested
-        # get posted data
-        postedData = request.get_json()
-        # validate posted data
-        status_code = checkPostedData(postedData, "multiply")
-        print("validation stus code = ", status_code)
-        if (status_code != 200):
-            ret_json = {
-                "Mesasge": "An error has occured",
-                "Status Code": status_code
-            }
-            return jsonify(ret_json)
-
-        x = postedData["x"]
-        y = postedData["y"]
-        x = int(x)
-        y = int(y)
-        result = x * y
-        ret_json = {
-            "Message": result,
-            "Status code": 200
-        }
-        return jsonify(ret_json)
-
-
-class Divde(Resource):
-    def post(self):
-        # If I am here, then then the resource Add was requested
-        # get posted data
-        postedData = request.get_json()
-        # validate posted data
-        status_code = checkPostedData(postedData, "division")
-        print("validation stus code = ", status_code)
-        if (status_code != 200):
-            ret_json = {
-                "Mesasge": "An error has occured",
-                "Status Code": status_code
-            }
-            return jsonify(ret_json)
-
-        x = postedData["x"]
-        y = postedData["y"]
-        x = int(x)
-        y = int(y)
-        # turning into float to get a better looking output
-        result = (x * 1.0) / y
-        ret_json = {
-            "Message": result,
-            "Status code": 200
-        }
-        return jsonify(ret_json)
-
-
-api.add_resource(Add, "/add")
-api.add_resource(Subtract, "/subtract")
-api.add_resource(Multiplpy, "/multiply")
-api.add_resource(Divde, "/division")
-api.add_resource(Visit, "/hello")
-
-
-@app.route('/')
-def hello_world():
-    return 'hello world'
-
+api.add_resource(Register, '/register')
+api.add_resource(Store, '/store')
+api.add_resource(ListSentences, '/list')
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0")
